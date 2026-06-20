@@ -1,0 +1,30 @@
+# NOTE: git does NOT support inline (end-of-line) comments in .gitignore —
+# every comment must be on its own line, or the pattern silently won't match.
+
+# --- secrets (never commit) ---
+.env
+.env.*
+!.env.example
+storage_state.json
+*.key
+
+# --- user data / generated (don't ship) ---
+# per-game knowledge-graph indexes (contain derived/full book text — copyright)
+lightrag_data/
+# audit log contains user prompts
+logs/
+# copyrighted rulebook PDFs — each user supplies their own
+books/
+*.pdf
+
+# --- os / editor cruft ---
+.DS_Store
+.idea/
+.vscode/
+
+# --- python ---
+.venv/
+.venv-*/
+__pycache__/
+*.pyc
+*.egg-info/

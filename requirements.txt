@@ -1,0 +1,21 @@
+# --- Core proxy ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+
+# --- NotebookLM backend (unofficial SDK) ---
+notebooklm-py>=0.7,<1.0
+
+# --- LightRAG backend (KG + vector RAG, the recommended backend) ---
+# OpenAI embeddings + Gemini (via google-genai) for KG/generation + pymupdf for PDFs.
+lightrag-hku>=1.5
+pymupdf>=1.24
+openai>=1.40
+nicegui>=2.0       # admin dashboard mounted at /admin
+pywebview>=5.0     # optional: --native desktop window
+
+# --- Gemini backend (File Search RAG) + fallback generator ---
+# Required for BACKEND=gemini_filesearch. File Search needs google-genai >= 2.x.
+google-genai>=2.4
