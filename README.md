@@ -10,6 +10,11 @@ It uses **one free Google Gemini key** by default, and on the free tier **can't
 cost you anything**. (Optional upgrades for stronger results are in
 [Cost & quality](#cost--quality).)
 
+![The admin dashboard — connect PUM, manage games, and add rulebooks](docs/dashboard.png)
+
+*The browser dashboard: connect PUM, see your games, and add rulebooks by dropping
+in PDFs. (Filenames blurred in this screenshot.)*
+
 ---
 
 ## Setup (about 5 minutes)
