@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Setup, cost & configuration questions
+    url: https://github.com/briannewtonpsyd/grounded-rpg-proxy#readme
+    about: Most "how do I set this up / what will it cost / how do I enable X" questions are answered in the README. Please check there first.
