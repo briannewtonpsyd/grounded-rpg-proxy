@@ -270,6 +270,14 @@ async def _lightrag_ingest(slug: str, books: list[tuple[str, str]]) -> None:
     if skip_kg:
         print("RAG-only mode (skip_kg): no knowledge-graph extraction — embeddings only. "
               "Queries will use vector search (naive mode).", flush=True)
+    # Safety: a cost ceiling against a model we can't price (e.g. a custom endpoint, or an
+    # OpenRouter model missing from its live pricing) silently never enforces. Say so up
+    # front. OpenRouter models we CAN price live don't trip this; nor does the default path.
+    if settings.ingest_max_cost_usd > 0 and not skip_kg and not ingest_cost_is_priceable():
+        print(f"⚠️  Cost ceiling ${settings.ingest_max_cost_usd:.2f} is set, but '"
+              f"{settings.lightrag_ingest_llm_model}' has no price available — the ceiling CANNOT "
+              f"enforce and the run will report $0. Watch your provider's dashboard for real spend.",
+              flush=True)
     total_t = time.monotonic()
     for i, (name, text) in enumerate(books, 1):
         verb = "embedding chunks" if skip_kg else "extracting knowledge graph"
@@ -329,33 +337,103 @@ async def _lightrag_ingest(slug: str, books: list[tuple[str, str]]) -> None:
     _PROGRESS.update(phase="done", returncode=0, skipped=ingest_skipped["count"])
 
 
-# Pricing in USD per 1M tokens. VERIFY against current rates before quoting — these
-# are estimates (early 2026). Token COUNTS in the audit are exact; cost is derived.
+# STATIC price estimates, USD per 1M tokens, for the direct providers (Gemini/OpenAI
+# have no public pricing API). These DRIFT — verify before relying on them. The date
+# is surfaced to the user. Token COUNTS are always exact; only the $ rate is an estimate.
+# OpenRouter models are priced LIVE instead (see _openrouter_prices), so they're current.
+_PRICES_AS_OF = "2026-06-21"
 _PRICES = {
     "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
     "text-embedding-3-large": {"input": 0.13},
     "text-embedding-3-small": {"input": 0.02},
+    "gemini-embedding-001": {"input": 0.15},  # default embedder — so its cost line isn't $0
 }
+
+_OR_PRICE_CACHE: dict = {}  # OpenRouter model id -> {input,output} per 1M
+_OR_PRICE_FETCHED = False    # True once we've attempted the fetch (success OR failure)
+
+
+def _openrouter_prices() -> dict:
+    """OpenRouter's LIVE per-model pricing (USD per 1M tokens), fetched at most once per
+    process from its public models API. Returns {} on any failure (offline etc.) so callers
+    fall back to 'unknown' rather than breaking. The attempt is cached even on failure, so
+    an offline run doesn't re-hit the 10s timeout on every book."""
+    global _OR_PRICE_FETCHED
+    if _OR_PRICE_FETCHED:
+        return _OR_PRICE_CACHE
+    _OR_PRICE_FETCHED = True
+    try:
+        import urllib.request
+        data = json.load(urllib.request.urlopen(
+            "https://openrouter.ai/api/v1/models", timeout=10))
+        for m in data.get("data", []):
+            p = m.get("pricing") or {}
+            try:
+                _OR_PRICE_CACHE[m["id"]] = {"input": float(p["prompt"]) * 1e6,
+                                            "output": float(p["completion"]) * 1e6}
+            except (KeyError, ValueError, TypeError):
+                continue
+    except Exception:  # noqa: BLE001
+        pass
+    return _OR_PRICE_CACHE
+
+
+def _ingest_llm_rate() -> tuple[dict | None, str]:
+    """Resolve the ingest LLM's rate (USD/1M) and its source.
+    Returns (rate|None, source) where source is 'openrouter-live' | 'static' | 'unknown'."""
+    model = settings.lightrag_ingest_llm_model
+    if settings.lightrag_ingest_llm_provider == "openrouter":
+        live = _openrouter_prices().get(model)
+        return (live, "openrouter-live") if live else (None, "unknown")
+    if model in _PRICES:
+        return _PRICES[model], "static"
+    return None, "unknown"
+
+
+def ingest_cost_is_priceable() -> bool:
+    """True if we can actually price the ingest LLM (so the cost ceiling can enforce)."""
+    return _ingest_llm_rate()[0] is not None
 
 
 def _cost_breakdown(tok: dict) -> dict:
-    llm = _PRICES.get(settings.lightrag_ingest_llm_model, {"input": 0, "output": 0})
-    emb = _PRICES.get(settings.lightrag_embedding_model, {"input": 0})
-    in_cost = tok["llm_input"] / 1e6 * llm.get("input", 0)
-    out_cost = tok["llm_output"] / 1e6 * llm.get("output", 0)
-    emb_cost = tok["embedding"] / 1e6 * emb.get("input", 0)
+    # Price the model ACTUALLY used. LLM: live for OpenRouter, static for direct providers,
+    # else unknown ($0 placeholder, ceiling can't enforce). Embeddings: always a direct
+    # provider, so static; embedding_model_effective is the real model (gemini-embedding-001
+    # on the default path, not the raw OpenAI field).
+    llm, llm_src = _ingest_llm_rate()
+    emb_model = settings.embedding_model_effective
+    emb = _PRICES.get(emb_model)
+    llm_r = llm or {"input": 0, "output": 0}
+    emb_r = emb or {"input": 0}
+    in_cost = tok["llm_input"] / 1e6 * llm_r.get("input", 0)
+    out_cost = tok["llm_output"] / 1e6 * llm_r.get("output", 0)
+    emb_cost = tok["embedding"] / 1e6 * emb_r.get("input", 0)
     return {"llm_input_usd": round(in_cost, 4), "llm_output_usd": round(out_cost, 4),
             "embedding_usd": round(emb_cost, 4), "total_usd": round(in_cost + out_cost + emb_cost, 4),
-            "rates_per_1m": {"llm": llm, "embedding": emb}}
+            "rates_per_1m": {"llm": llm_r, "embedding": emb_r},
+            "rates_known": {"llm": llm is not None, "embedding": emb is not None},
+            "llm_rate_source": llm_src}
 
 
 def _print_cost(tok: dict, cost: dict) -> None:
+    src = cost.get("llm_rate_source", "static")
     print(f"   Tokens — KG LLM ({settings.lightrag_ingest_llm_model}): "
           f"{tok['llm_input']:,} in + {tok['llm_output']:,} out | "
-          f"embeddings ({settings.lightrag_embedding_model}): {tok['embedding']:,}")
+          f"embeddings ({settings.embedding_model_effective}): {tok['embedding']:,}")
     print(f"   Est. cost — LLM ${cost['llm_input_usd']:.4f} in + ${cost['llm_output_usd']:.4f} out "
-          f"+ embed ${cost['embedding_usd']:.4f}  =  ${cost['total_usd']:.4f}  (verify rates)")
+          f"+ embed ${cost['embedding_usd']:.4f}  =  ${cost['total_usd']:.4f}")
+    # Prominent provenance: live OpenRouter rates vs dated static estimates.
+    if tok["llm_output"] and src == "openrouter-live":
+        print(f"   Rates: LLM = live OpenRouter pricing (fetched this run); embeddings = static "
+              f"estimate as of {_PRICES_AS_OF}. Verify before relying on costs.", flush=True)
+    elif tok["llm_output"] and src == "unknown":
+        print(f"   ⚠️  No price for ingest model '{settings.lightrag_ingest_llm_model}' — the LLM "
+              f"cost above is a $0 PLACEHOLDER, not an estimate. Check your provider's dashboard.",
+              flush=True)
+    else:
+        print(f"   Rates: static estimates as of {_PRICES_AS_OF} — prices change; verify current "
+              f"rates with your provider.", flush=True)
 
 
 def lightrag_list() -> None:

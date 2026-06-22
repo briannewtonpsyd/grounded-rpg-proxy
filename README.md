@@ -91,13 +91,19 @@ game** (not when you play). Change these in the dashboard **Settings**.
 ### ⚠️ The knowledge graph costs real money — set a budget first
 
 Building the graph runs an AI model over **every chunk of every book**, so cost
-scales with how much you ingest. Rough, measured numbers (per book ≈ 200–300 pages):
+scales with how much you ingest. Rough numbers (per book ≈ 200–300 pages):
 
 | Ingest mode | ~Cost per book | A 4-book library |
 |---|---|---|
 | **RAG-only (default)** | a few cents | **~$0.10** |
 | KG on `gemini-2.5-flash-lite` (default KG model) | ~$1–1.5 | ~$4–6 |
 | KG on `gemini-2.5-flash` (higher quality) | ~$6–7 | **~$25–30** |
+
+> 💲 **These figures, and the in-app cost estimates, are based on provider prices
+> as of 2026-06-21 — prices change, so treat them as estimates and verify with your
+> provider.** Token *counts* shown after each ingest are exact; only the $ conversion
+> is an estimate. (Exception: when you use **OpenRouter**, the proxy fetches that
+> model's *live* price from OpenRouter at ingest time, so those costs are current.)
 
 **It adds up faster than you'd think.** Re-ingesting a book re-charges you, and
 during development we ran up **~$26 in a single day** from repeated KG re-ingests.
@@ -123,6 +129,25 @@ and spends real tokens on *your* account. You alone are responsible for any char
 you incur — please use the free tier, a cost ceiling, and a budget alert as above.
 The software is provided **as-is, with no warranty** (see [LICENSE](LICENSE)); the
 authors are not liable for API costs or any other damages.
+
+### Advanced: use other models via OpenRouter (optional)
+
+Prefer Claude, GPT, or another model for generation? In the dashboard **Settings**,
+open **"OpenRouter — optional"**, set the **Query** (and/or **Ingest**) provider to
+`openrouter`, paste one OpenRouter key, and use `vendor/model` ids (e.g.
+`anthropic/claude-haiku-4.5`, `openai/gpt-4o-mini`, `google/gemini-2.5-flash`). The
+**Test query LLM connection** button confirms a model works before you play (model
+slugs change over time — check [openrouter.ai/models](https://openrouter.ai/models)).
+Two caveats:
+
+- **OpenRouter has no embeddings or reranking** — you still need a Gemini (free) or
+  OpenAI key for embeddings. It only swaps the *generation/extraction* model.
+- **Cost ceilings can't price arbitrary OpenRouter models**, so for a knowledge-graph
+  ingest on OpenRouter the `INGEST_MAX_COST_USD` cap won't enforce and the estimate
+  reads `$0` — the proxy warns you, but watch your OpenRouter dashboard for real spend.
+- **A new OpenRouter key has no credit**, so most models return "insufficient credits"
+  until you add funds. Some `:free` model ids work without credit (availability varies)
+  — the **Test connection** button tells you immediately if a model isn't reachable.
 
 ---
 
