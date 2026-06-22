@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+_Changes landing on `main` since the last release. At release time this heading is
+renamed to the new version + date. Group entries under: Added · Changed · Fixed ·
+Removed._
+
 ## [0.1.0] — 2026-06-21
 
 First public release. A small local **OpenAI-compatible** proxy that grounds
@@ -39,4 +45,5 @@ vector retrieval).
 - `gemini_filesearch` and `notebooklm` backends ship but are **deprecated** in favor
   of `lightrag`.
 
+[Unreleased]: https://github.com/briannewtonpsyd/grounded-rpg-proxy/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/briannewtonpsyd/grounded-rpg-proxy/releases/tag/v0.1.0
