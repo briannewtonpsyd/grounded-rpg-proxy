@@ -139,7 +139,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     # OpenRouter (provider=openrouter): one key drives generation + KG ingest through
     # https://openrouter.ai/api/v1, with model ids in "vendor/model" form (e.g.
-    # anthropic/claude-3.5-sonnet). NOTE: OpenRouter does NOT serve embeddings or
+    # anthropic/claude-haiku-4.5). NOTE: OpenRouter does NOT serve embeddings or
     # reranking — those still need a Gemini (free) or OpenAI key. Falls back to
     # LIGHTRAG_LLM_API_KEY so older configs that stored the key there keep working.
     openrouter_api_key: str = ""

@@ -483,8 +483,9 @@ def init_admin(app) -> None:
                         .classes("w-full mt-2"):
                     ui.label("Set the Query and/or Ingest provider above to 'openrouter', paste your "
                              "key here, and use 'vendor/model' model ids — e.g. "
-                             "anthropic/claude-3.5-sonnet, openai/gpt-4o-mini, "
-                             "google/gemini-2.0-flash-001.").classes("text-caption text-grey")
+                             "anthropic/claude-haiku-4.5, openai/gpt-4o-mini, "
+                             "google/gemini-2.5-flash. (Slugs change — see openrouter.ai/models.)"
+                             ).classes("text-caption text-grey")
                     ui.label("⚠️ OpenRouter has no embeddings or reranking — keep a Gemini key (free) "
                              "or OpenAI key above for those.").classes("text-caption text-warning")
                     k_orkey = ui.input("OpenRouter key", value=settings.openrouter_api_key,

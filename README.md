@@ -129,8 +129,10 @@ authors are not liable for API costs or any other damages.
 Prefer Claude, GPT, or another model for generation? In the dashboard **Settings**,
 open **"OpenRouter — optional"**, set the **Query** (and/or **Ingest**) provider to
 `openrouter`, paste one OpenRouter key, and use `vendor/model` ids (e.g.
-`anthropic/claude-3.5-sonnet`). The **Test query LLM connection** button confirms it
-works before you play. Two caveats:
+`anthropic/claude-haiku-4.5`, `openai/gpt-4o-mini`, `google/gemini-2.5-flash`). The
+**Test query LLM connection** button confirms a model works before you play (model
+slugs change over time — check [openrouter.ai/models](https://openrouter.ai/models)).
+Two caveats:
 
 - **OpenRouter has no embeddings or reranking** — you still need a Gemini (free) or
   OpenAI key for embeddings. It only swaps the *generation/extraction* model.
