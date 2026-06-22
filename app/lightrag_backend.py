@@ -22,6 +22,13 @@ from .transform import extract_citations, slugify
 log = logging.getLogger("nblm.lightrag")
 
 GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
+# Attribution headers OpenRouter recommends (surfaces this app in its dashboard/
+# rankings). Optional — harmless if the OpenAI client/library ignores them.
+OPENROUTER_HEADERS = {
+    "HTTP-Referer": "https://github.com/briannewtonpsyd/grounded-rpg-proxy",
+    "X-Title": "Grounded RPG Proxy",
+}
 _INDEX_MARKERS = ("vdb_chunks.json", "kv_store_full_docs.json",
                   "graph_chunk_entity_relation.graphml")
 
@@ -47,7 +54,8 @@ def _resolve_llm(provider: str, model: str, reasoning: str):
     if provider == "anthropic":
         return "anthropic", model, None, settings.anthropic_api_key, {}
     if provider == "openrouter":
-        return "openai", model, "https://openrouter.ai/api/v1", settings.lightrag_llm_api_key, {}
+        key = settings.openrouter_api_key or settings.lightrag_llm_api_key
+        return "openai", model, OPENROUTER_URL, key, {"extra_headers": dict(OPENROUTER_HEADERS)}
     return "openai", model, settings.lightrag_llm_base_url or None, settings.lightrag_llm_api_key, {}
 
 
@@ -63,6 +71,18 @@ async def _call_llm(provider, model, reasoning, prompt, system_prompt, history_m
     return await openai_complete_if_cache(
         model, prompt, system_prompt=system_prompt,
         history_messages=history_messages or [], base_url=base_url, api_key=api_key, **kw)
+
+
+async def test_llm(provider: str, model: str, reasoning: str = "none") -> tuple[bool, str]:
+    """One tiny round-trip to validate a provider/model/key from the dashboard.
+    Returns (ok, detail) and never raises — on failure `detail` is the error text."""
+    try:
+        out = await _call_llm(provider, model, reasoning,
+                              "Reply with the single word: OK.",
+                              "You are a connectivity check.", [])
+        return True, ((out or "").strip()[:200] or "(empty response)")
+    except Exception as e:  # noqa: BLE001
+        return False, f"{type(e).__name__}: {e}"[:300]
 
 
 async def _llm_func(prompt, system_prompt=None, history_messages=None, **kw):

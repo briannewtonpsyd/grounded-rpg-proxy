@@ -124,6 +124,20 @@ you incur — please use the free tier, a cost ceiling, and a budget alert as ab
 The software is provided **as-is, with no warranty** (see [LICENSE](LICENSE)); the
 authors are not liable for API costs or any other damages.
 
+### Advanced: use other models via OpenRouter (optional)
+
+Prefer Claude, GPT, or another model for generation? In the dashboard **Settings**,
+open **"OpenRouter — optional"**, set the **Query** (and/or **Ingest**) provider to
+`openrouter`, paste one OpenRouter key, and use `vendor/model` ids (e.g.
+`anthropic/claude-3.5-sonnet`). The **Test query LLM connection** button confirms it
+works before you play. Two caveats:
+
+- **OpenRouter has no embeddings or reranking** — you still need a Gemini (free) or
+  OpenAI key for embeddings. It only swaps the *generation/extraction* model.
+- **Cost ceilings can't price arbitrary OpenRouter models**, so for a knowledge-graph
+  ingest on OpenRouter the `INGEST_MAX_COST_USD` cap won't enforce and the estimate
+  reads `$0` — the proxy warns you, but watch your OpenRouter dashboard for real spend.
+
 ---
 
 ## Everyday use

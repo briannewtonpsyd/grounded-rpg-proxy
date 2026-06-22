@@ -270,6 +270,15 @@ async def _lightrag_ingest(slug: str, books: list[tuple[str, str]]) -> None:
     if skip_kg:
         print("RAG-only mode (skip_kg): no knowledge-graph extraction — embeddings only. "
               "Queries will use vector search (naive mode).", flush=True)
+    # Safety: a cost ceiling against a model we can't price (OpenRouter/custom KG model)
+    # silently never enforces. Say so up front rather than letting the user believe the
+    # cap is live. Default path (skip_kg / no ceiling) never reaches this.
+    if settings.ingest_max_cost_usd > 0 and not skip_kg \
+            and settings.lightrag_ingest_llm_model not in _PRICES:
+        print(f"⚠️  Cost ceiling ${settings.ingest_max_cost_usd:.2f} is set, but '"
+              f"{settings.lightrag_ingest_llm_model}' has no price on record (e.g. an OpenRouter/"
+              f"custom model) — the ceiling CANNOT enforce and the run will report $0. Watch your "
+              f"provider's dashboard for real spend.", flush=True)
     total_t = time.monotonic()
     for i, (name, text) in enumerate(books, 1):
         verb = "embedding chunks" if skip_kg else "extracting knowledge graph"
@@ -340,6 +349,11 @@ _PRICES = {
 
 
 def _cost_breakdown(tok: dict) -> dict:
+    # rates_known flags whether we actually have a price for the configured model.
+    # Unknown (e.g. an OpenRouter/custom model) => the cost below is a $0 placeholder,
+    # not an estimate, and the cost ceiling can't enforce against it.
+    llm_known = settings.lightrag_ingest_llm_model in _PRICES
+    emb_known = settings.lightrag_embedding_model in _PRICES
     llm = _PRICES.get(settings.lightrag_ingest_llm_model, {"input": 0, "output": 0})
     emb = _PRICES.get(settings.lightrag_embedding_model, {"input": 0})
     in_cost = tok["llm_input"] / 1e6 * llm.get("input", 0)
@@ -347,7 +361,8 @@ def _cost_breakdown(tok: dict) -> dict:
     emb_cost = tok["embedding"] / 1e6 * emb.get("input", 0)
     return {"llm_input_usd": round(in_cost, 4), "llm_output_usd": round(out_cost, 4),
             "embedding_usd": round(emb_cost, 4), "total_usd": round(in_cost + out_cost + emb_cost, 4),
-            "rates_per_1m": {"llm": llm, "embedding": emb}}
+            "rates_per_1m": {"llm": llm, "embedding": emb},
+            "rates_known": {"llm": llm_known, "embedding": emb_known}}
 
 
 def _print_cost(tok: dict, cost: dict) -> None:
@@ -356,6 +371,12 @@ def _print_cost(tok: dict, cost: dict) -> None:
           f"embeddings ({settings.lightrag_embedding_model}): {tok['embedding']:,}")
     print(f"   Est. cost — LLM ${cost['llm_input_usd']:.4f} in + ${cost['llm_output_usd']:.4f} out "
           f"+ embed ${cost['embedding_usd']:.4f}  =  ${cost['total_usd']:.4f}  (verify rates)")
+    # Only warn when the LLM actually ran (KG on) AND we have no price for it — i.e. an
+    # OpenRouter/custom model. The default Gemini/skip_kg path never trips this.
+    if tok["llm_output"] and not cost.get("rates_known", {}).get("llm", True):
+        print(f"   ⚠️  No price on record for ingest model '{settings.lightrag_ingest_llm_model}' "
+              f"(e.g. an OpenRouter/custom model) — the LLM cost above is a $0 PLACEHOLDER, not a "
+              f"real estimate. Check the model's price on your provider's dashboard.", flush=True)
 
 
 def lightrag_list() -> None:

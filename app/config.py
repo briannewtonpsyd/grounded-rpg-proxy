@@ -134,9 +134,15 @@ class Settings(BaseSettings):
     # gemini | openai | anthropic | openrouter | custom
     lightrag_llm_provider: str = "gemini"
     lightrag_llm_model: str = "gemini-2.5-flash"
-    lightrag_llm_base_url: str = ""          # openrouter/custom
-    lightrag_llm_api_key: str = ""           # openrouter/custom (falls back to provider keys)
+    lightrag_llm_base_url: str = ""          # provider=custom: any OpenAI-compatible endpoint
+    lightrag_llm_api_key: str = ""           # provider=custom: that endpoint's key
     anthropic_api_key: str = ""
+    # OpenRouter (provider=openrouter): one key drives generation + KG ingest through
+    # https://openrouter.ai/api/v1, with model ids in "vendor/model" form (e.g.
+    # anthropic/claude-3.5-sonnet). NOTE: OpenRouter does NOT serve embeddings or
+    # reranking — those still need a Gemini (free) or OpenAI key. Falls back to
+    # LIGHTRAG_LLM_API_KEY so older configs that stored the key there keep working.
+    openrouter_api_key: str = ""
 
     # Ingest (KG construction) LLM — separate from queries. This is the COSTLY step
     # (thousands of LLM calls: entity/relation extraction per chunk + merges), and
