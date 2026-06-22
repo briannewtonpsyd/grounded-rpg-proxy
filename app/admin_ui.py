@@ -462,61 +462,57 @@ def init_admin(app) -> None:
                 rerank_on = ui.switch("Reranking enabled", value=settings.lightrag_enable_rerank)
                 ui.label("API keys (click the eye to reveal)").classes("text-grey mt-2")
                 with ui.grid(columns=2).classes("gap-3 w-full"):
-                    k_openai = ui.input("OpenAI key (embeddings)", value=settings.openai_api_key,
+                    k_gemini = ui.input("Gemini key (default: embeddings + generation)",
+                                        value=settings.gemini_api_key,
                                         password=True, password_toggle_button=True)
-                    k_gemini = ui.input("Gemini key", value=settings.gemini_api_key,
+                    k_openai = ui.input("OpenAI key (embeddings / openai provider)",
+                                        value=settings.openai_api_key,
                                         password=True, password_toggle_button=True)
-                    k_rerank = ui.input("Rerank key (Cohere/Jina)", value=settings.rerank_api_key,
-                                        password=True, password_toggle_button=True)
-                    k_anthropic = ui.input("Anthropic key (Claude)", value=settings.anthropic_api_key,
+                    k_anthropic = ui.input("Anthropic key (anthropic provider)",
+                                           value=settings.anthropic_api_key,
                                            password=True, password_toggle_button=True)
-                    k_llmurl = ui.input("Custom endpoint base URL (provider=custom)",
+                    k_orkey = ui.input("OpenRouter key (openrouter provider)",
+                                       value=settings.openrouter_api_key,
+                                       password=True, password_toggle_button=True)
+                    k_rerank = ui.input("Rerank key (Cohere/Jina, optional)",
+                                        value=settings.rerank_api_key,
+                                        password=True, password_toggle_button=True)
+                    k_llmurl = ui.input("Custom endpoint base URL (custom provider)",
                                         value=settings.lightrag_llm_base_url)
-                    k_llmkey = ui.input("Custom endpoint key (provider=custom)",
+                    k_llmkey = ui.input("Custom endpoint key (custom provider)",
                                         value=settings.lightrag_llm_api_key,
                                         password=True, password_toggle_button=True)
+                ui.label("OpenRouter: one key, any vendor/model (e.g. anthropic/claude-haiku-4.5, "
+                         "openai/gpt-4o-mini) — but it has no embeddings/reranking, so keep a Gemini "
+                         "or OpenAI key for those. Slugs change: see openrouter.ai/models.") \
+                    .classes("text-caption text-grey")
 
-                # OpenRouter (optional): one key drives generation + KG ingest when a
-                # provider above is set to 'openrouter'. Tucked in an expansion so the
-                # default one-key Gemini path stays clutter-free.
-                with ui.expansion("OpenRouter — optional: one key, many models") \
-                        .classes("w-full mt-2"):
-                    ui.label("Set the Query and/or Ingest provider above to 'openrouter', paste your "
-                             "key here, and use 'vendor/model' model ids — e.g. "
-                             "anthropic/claude-haiku-4.5, openai/gpt-4o-mini, "
-                             "google/gemini-2.5-flash. (Slugs change — see openrouter.ai/models.)"
-                             ).classes("text-caption text-grey")
-                    ui.label("⚠️ OpenRouter has no embeddings or reranking — keep a Gemini key (free) "
-                             "or OpenAI key above for those.").classes("text-caption text-warning")
-                    k_orkey = ui.input("OpenRouter key", value=settings.openrouter_api_key,
-                                       password=True, password_toggle_button=True).classes("w-full")
-                    test_out = ui.label("").classes("text-caption")
+                # Test the *currently selected* provider/model/keys (any provider), without
+                # persisting the typed values — snapshot → probe → restore; only Save applies.
+                async def test_llm_conn():
+                    from .lightrag_backend import test_llm
+                    fields = {
+                        "openrouter_api_key": k_orkey.value, "lightrag_llm_api_key": k_llmkey.value,
+                        "lightrag_llm_base_url": k_llmurl.value, "gemini_api_key": k_gemini.value,
+                        "openai_api_key": k_openai.value, "anthropic_api_key": k_anthropic.value,
+                    }
+                    snap = {k: getattr(settings, k) for k in fields}
+                    for k, v in fields.items():
+                        setattr(settings, k, v)
+                    test_out.classes(replace="text-caption text-grey")
+                    test_out.text = f"Testing {prov.value} · {model.value}…"
+                    try:
+                        ok, detail = await test_llm(prov.value, model.value, effort.value)
+                    finally:
+                        for k, v in snap.items():
+                            setattr(settings, k, v)  # restore — Save is what applies changes
+                    test_out.text = ("✓ " if ok else "✗ ") + detail
+                    test_out.classes(replace="text-caption "
+                                     + ("text-positive" if ok else "text-negative"))
 
-                    async def test_llm_conn():
-                        from .lightrag_backend import test_llm
-                        # Probe with the on-screen keys (whichever provider is selected), but
-                        # DON'T persist them: testing must not silently change the live config.
-                        # Snapshot every key field → set from the form → restore in finally.
-                        fields = {
-                            "openrouter_api_key": k_orkey.value, "lightrag_llm_api_key": k_llmkey.value,
-                            "lightrag_llm_base_url": k_llmurl.value, "gemini_api_key": k_gemini.value,
-                            "openai_api_key": k_openai.value, "anthropic_api_key": k_anthropic.value,
-                        }
-                        snap = {k: getattr(settings, k) for k in fields}
-                        for k, v in fields.items():
-                            setattr(settings, k, v)
-                        test_out.classes(replace="text-caption text-grey")
-                        test_out.text = f"Testing {prov.value} · {model.value}…"
-                        try:
-                            ok, detail = await test_llm(prov.value, model.value, effort.value)
-                        finally:
-                            for k, v in snap.items():
-                                setattr(settings, k, v)  # restore — Save is what applies changes
-                        test_out.text = ("✓ " if ok else "✗ ") + detail
-                        test_out.classes(replace="text-caption "
-                                         + ("text-positive" if ok else "text-negative"))
-
+                with ui.row().classes("items-center gap-3 mt-1"):
                     ui.button("Test query LLM connection", on_click=test_llm_conn).props("flat dense")
+                    test_out = ui.label("").classes("text-caption")
 
                 def save_settings():
                     emb_model = emb.value
