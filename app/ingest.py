@@ -350,15 +350,19 @@ _PRICES = {
     "gemini-embedding-001": {"input": 0.15},  # default embedder — so its cost line isn't $0
 }
 
-_OR_PRICE_CACHE: dict = {}  # OpenRouter model id -> {input,output} per 1M; fetched once
+_OR_PRICE_CACHE: dict = {}  # OpenRouter model id -> {input,output} per 1M
+_OR_PRICE_FETCHED = False    # True once we've attempted the fetch (success OR failure)
 
 
 def _openrouter_prices() -> dict:
-    """OpenRouter's LIVE per-model pricing (USD per 1M tokens), fetched once per process
-    from its public models API. Returns {} on any failure (offline etc.) so callers fall
-    back to 'unknown' rather than breaking."""
-    if _OR_PRICE_CACHE:
+    """OpenRouter's LIVE per-model pricing (USD per 1M tokens), fetched at most once per
+    process from its public models API. Returns {} on any failure (offline etc.) so callers
+    fall back to 'unknown' rather than breaking. The attempt is cached even on failure, so
+    an offline run doesn't re-hit the 10s timeout on every book."""
+    global _OR_PRICE_FETCHED
+    if _OR_PRICE_FETCHED:
         return _OR_PRICE_CACHE
+    _OR_PRICE_FETCHED = True
     try:
         import urllib.request
         data = json.load(urllib.request.urlopen(
