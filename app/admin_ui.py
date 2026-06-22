@@ -240,7 +240,18 @@ def init_admin(app) -> None:
             with ui.card().classes("w-full"):
                 ui.label("Add a game").classes("text-subtitle1 text-bold serif")
                 ui.label("Knowledge-graph extraction runs LLM calls per chunk — minutes per book.")
-                slug_in = ui.input("Game name (slug)", placeholder="forbidden-lands").classes("w-72")
+                slug_in = ui.input("Game name", placeholder="e.g. Forbidden Lands").classes("w-72")
+                slug_preview = ui.label("").classes("text-caption text-grey")
+
+                def _update_slug_preview():
+                    v = (slug_in.value or "").strip()
+                    if v:
+                        slug_preview.text = f"→ used in PUM as model:  {slugify(v)}"
+                    else:
+                        slug_preview.text = ("Spaces & capitals are fine — it becomes a simple "
+                                             "name like “forbidden-lands”.")
+                slug_in.on_value_change(lambda _: _update_slug_preview())
+                _update_slug_preview()
                 rag_only_sw = ui.switch("RAG-only (cheap): skip knowledge graph",
                                         value=settings.lightrag_skip_kg)
                 ui.label("On = embeddings only (~cents/library, no graph; vector search). "
