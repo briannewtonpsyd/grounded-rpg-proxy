@@ -311,6 +311,9 @@ def init_admin(app) -> None:
                     if not tmpdir["path"]:
                         ui.notify("Upload at least one PDF", type="negative")
                         return
+                    if not (emb.value or "").strip():
+                        ui.notify("Pick or type an embedding model first", type="negative")
+                        return
                     slug = slugify(raw)  # safe: raw is non-empty, so never the 'untitled' fallback
                     # Explicit OK before OCR — but only when it's non-trivial. A couple of
                     # image pages (covers/art) aren't worth a confirmation; hundreds are.
@@ -357,7 +360,24 @@ def init_admin(app) -> None:
                     # (pipe block) or crash on a disconnect — the ingest even survives a UI
                     # restart. The UI is now just a poller over those two files.
                     logf = open(log_path, "w")
-                    env = {**os.environ, "LIGHTRAG_SKIP_KG": str(rag_only_sw.value).lower()}
+                    # Pass the config the detached ingest must use EXPLICITLY, read from the
+                    # on-screen controls (env vars override .env). This honors what the user
+                    # has selected even if they haven't clicked Save, and avoids relying on a
+                    # .env write landing in time — otherwise the index can be built with the
+                    # wrong embedder (silently falling back to the Gemini default) and won't query.
+                    _ep = emb_prov.value
+                    _em = (emb.value or "").strip()
+                    _emodel_key = ("LIGHTRAG_GEMINI_EMBEDDING_MODEL" if _ep == "gemini"
+                                   else "LIGHTRAG_EMBEDDING_MODEL")
+                    env = {**os.environ,
+                           "LIGHTRAG_SKIP_KG": str(rag_only_sw.value).lower(),
+                           "LIGHTRAG_EMBEDDING_PROVIDER": _ep,
+                           _emodel_key: _em,
+                           "LIGHTRAG_EMBEDDING_DIM": str(1536 if "small" in _em else 3072),
+                           # KG ingest LLM (used only when not skip_kg) — honor its dropdowns too.
+                           "LIGHTRAG_INGEST_LLM_PROVIDER": ing_prov.value,
+                           "LIGHTRAG_INGEST_LLM_MODEL": ing_model.value,
+                           "LIGHTRAG_INGEST_REASONING_EFFORT": ing_effort.value}
                     proc = subprocess.Popen(
                         [sys.executable, "-m", "app.ingest", "--game", slug, run_dir,
                          "--progress-file", prog_path, "--cleanup-source"],
@@ -463,20 +483,52 @@ def init_admin(app) -> None:
                     ing_effort = ui.select(["none", "low", "medium", "high"],
                                            value=settings.lightrag_ingest_reasoning_effort,
                                            label="Ingest reasoning (gemini only)")
-                    emb_prov = ui.select(
-                        {"gemini": "Gemini (one key · gemini-embedding-001 · 3072d)",
-                         "openai": "OpenAI (needs 2nd key · text-embedding-3-large · 3072d)",
-                         "openrouter": "OpenRouter (your OR key · e.g. openai/text-embedding-3-large)"},
-                        value=settings.lightrag_embedding_provider,
-                        label="Embedding provider (re-ingest to change)")
-                    emb = ui.select(
-                        {"text-embedding-3-small": "OpenAI small (1536d · cheaper/faster)",
-                         "text-embedding-3-large": "OpenAI large (3072d · best quality)"},
-                        value=settings.lightrag_embedding_model, label="OpenAI embed model (if provider=openai)")
                     rerankp = ui.select(["cohere", "jina"], value=settings.rerank_provider,
                                         label="Rerank provider")
                     cost_cap = ui.number("Ingest cost ceiling $ (0 = none)",
                                          value=settings.ingest_max_cost_usd, format="%.2f", min=0)
+
+                # Embeddings: provider + model side by side. The model field adapts to the
+                # provider — a fixed pick for Gemini, the two OpenAI models, or a typeable
+                # field for OpenRouter (where many model ids are valid).
+                _EMB_CHOICES = {
+                    "gemini": ["gemini-embedding-001"],
+                    "openai": ["text-embedding-3-small", "text-embedding-3-large"],
+                    "openrouter": ["openai/text-embedding-3-large", "openai/text-embedding-3-small"],
+                }
+                _emb_cur = settings.embedding_model_effective
+                _emb_opts = _EMB_CHOICES.get(settings.lightrag_embedding_provider, ["text-embedding-3-large"])
+                _emb_opts = list(dict.fromkeys(_emb_opts + [_emb_cur]))  # ensure current value is selectable
+                with ui.row().classes("items-center gap-3 w-full no-wrap"):
+                    emb_prov = ui.select(["gemini", "openai", "openrouter"],
+                                         value=settings.lightrag_embedding_provider,
+                                         label="Embedding provider").classes("grow")
+                    emb = ui.select(_emb_opts, value=_emb_cur, with_input=True,
+                                    new_value_mode="add-unique", label="Embedding model").classes("grow")
+                emb_note = ui.label("").classes("text-caption text-grey")
+
+                def _set_emb_note():
+                    emb_note.text = {
+                        "gemini": "Gemini uses gemini-embedding-001 (3072d) — one model, no choice needed.",
+                        "openai": "Pick an OpenAI embedding model. Re-ingest each game to change.",
+                        "openrouter": "Pick or TYPE any OpenRouter embedding id (e.g. "
+                                      "openai/text-embedding-3-large). Re-ingest to change.",
+                    }.get(emb_prov.value, "")
+
+                def _on_emb_prov_change():
+                    # Provider CHANGED: swap the suggestions and reset to that provider's
+                    # default (the previous model doesn't carry across providers).
+                    p = emb_prov.value
+                    opts = _EMB_CHOICES.get(p, ["text-embedding-3-large"])
+                    emb.set_options(opts, value=opts[0])
+                    emb.set_enabled(p != "gemini")  # Gemini has a single embedding model
+                    _set_emb_note()
+
+                emb_prov.on_value_change(lambda _: _on_emb_prov_change())
+                # Initial state: keep the saved model (don't reset it), just set enabled + note.
+                emb.set_enabled(settings.lightrag_embedding_provider != "gemini")
+                _set_emb_note()
+
                 rerank_on = ui.switch("Reranking enabled", value=settings.lightrag_enable_rerank)
                 ui.label("API keys (click the eye to reveal)").classes("text-grey mt-2")
                 with ui.grid(columns=2).classes("gap-3 w-full"):
@@ -534,17 +586,23 @@ def init_admin(app) -> None:
                     test_out = ui.label("").classes("text-caption")
 
                 def save_settings():
-                    emb_model = emb.value
-                    emb_dim = 3072 if "large" in emb_model else 1536
-                    emb_changed = (emb_model != settings.lightrag_embedding_model
+                    emb_model = (emb.value or "").strip()
+                    # 3072 unless it's a *-small model (gemini-embedding-001 & -large are 3072).
+                    emb_dim = 1536 if "small" in emb_model else 3072
+                    emb_changed = (emb_model != settings.embedding_model_effective
                                    or emb_prov.value != settings.lightrag_embedding_provider)
+                    # Route the model to the right setting: Gemini has its own field; openai/
+                    # openrouter share LIGHTRAG_EMBEDDING_MODEL.
+                    emb_env = ({"LIGHTRAG_GEMINI_EMBEDDING_MODEL": emb_model}
+                               if emb_prov.value == "gemini"
+                               else {"LIGHTRAG_EMBEDDING_MODEL": emb_model})
                     _update_env({
                         "LIGHTRAG_LLM_PROVIDER": prov.value, "LIGHTRAG_LLM_MODEL": model.value,
                         "LIGHTRAG_REASONING_EFFORT": effort.value, "LIGHTRAG_QUERY_MODE": mode.value,
                         "LIGHTRAG_INGEST_LLM_PROVIDER": ing_prov.value,
                         "LIGHTRAG_INGEST_LLM_MODEL": ing_model.value,
                         "LIGHTRAG_INGEST_REASONING_EFFORT": ing_effort.value,
-                        "LIGHTRAG_EMBEDDING_MODEL": emb_model, "LIGHTRAG_EMBEDDING_DIM": emb_dim,
+                        **emb_env, "LIGHTRAG_EMBEDDING_DIM": emb_dim,
                         "LIGHTRAG_EMBEDDING_PROVIDER": emb_prov.value,
                         "INGEST_MAX_COST_USD": cost_cap.value or 0,
                         "RERANK_PROVIDER": rerankp.value,
@@ -571,7 +629,10 @@ def init_admin(app) -> None:
                     settings.lightrag_llm_base_url = k_llmurl.value
                     settings.lightrag_llm_api_key = k_llmkey.value
                     settings.openrouter_api_key = k_orkey.value
-                    settings.lightrag_embedding_model = emb_model
+                    if emb_prov.value == "gemini":
+                        settings.lightrag_gemini_embedding_model = emb_model
+                    else:
+                        settings.lightrag_embedding_model = emb_model
                     settings.lightrag_embedding_dim = emb_dim
                     settings.lightrag_embedding_provider = emb_prov.value
                     settings.ingest_max_cost_usd = float(cost_cap.value or 0)

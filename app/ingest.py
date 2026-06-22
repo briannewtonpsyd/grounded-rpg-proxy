@@ -266,6 +266,7 @@ async def _lightrag_ingest(slug: str, books: list[tuple[str, str]]) -> None:
     audit = {"slug": slug, "model": settings.lightrag_ingest_llm_model,
              "reasoning": settings.lightrag_ingest_reasoning_effort,
              "embedding_model": embed_model, "embedding_provider": embed_provider,
+             "embedding_dim": settings.lightrag_embedding_dim,  # per-index dim for query-time
              "skip_kg": skip_kg, "concurrency": _LIGHTRAG_INGEST_KW, "books": []}
     if skip_kg:
         print("RAG-only mode (skip_kg): no knowledge-graph extraction — embeddings only. "

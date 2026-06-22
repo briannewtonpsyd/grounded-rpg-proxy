@@ -308,23 +308,26 @@ class LightRAGBackend:
     def _build(self, working_dir: str):
         from lightrag import LightRAG
         from lightrag.utils import EmbeddingFunc
-        # Query with the SAME embedding provider/model the index was built with (recorded
-        # in its audit), so OpenAI- and Gemini-built indexes both retrieve correctly. Legacy
-        # indexes (no recorded model) predate the provider option → all OpenAI -3-large.
+        # Query with the SAME embedding provider/model/DIM the index was built with
+        # (recorded in its audit) — NOT the global setting, so games built with different
+        # embedders (e.g. a 1536d OpenAI-small game next to a 3072d Gemini game) each query
+        # correctly. Legacy indexes (no recorded model) predate the provider option → OpenAI -3-large.
         model, provider = "text-embedding-3-large", "openai"
+        dim = settings.lightrag_embedding_dim
         try:
             a = json.load(open(os.path.join(working_dir, "ingest_audit.json")))
             if a.get("embedding_model"):
                 model = a["embedding_model"]
             provider = embedding_provider_for(model, a.get("embedding_provider", ""))
+            # dim: recorded value, else infer from the model (1536 only for *-small).
+            dim = a.get("embedding_dim") or (1536 if "small" in model else 3072)
         except Exception:  # noqa: BLE001
             pass
         kwargs = dict(
             working_dir=working_dir,
             llm_model_func=_llm_func,
             embedding_func=EmbeddingFunc(
-                embedding_dim=settings.lightrag_embedding_dim,
-                max_token_size=8192, func=make_embed_func(provider, model)),
+                embedding_dim=dim, max_token_size=8192, func=make_embed_func(provider, model)),
         )
         if settings.lightrag_enable_rerank and settings.rerank_api_key:
             kwargs["rerank_model_func"] = _rerank_func
