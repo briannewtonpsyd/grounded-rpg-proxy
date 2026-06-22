@@ -139,9 +139,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     # OpenRouter (provider=openrouter): one key drives generation + KG ingest through
     # https://openrouter.ai/api/v1, with model ids in "vendor/model" form (e.g.
-    # anthropic/claude-haiku-4.5). NOTE: OpenRouter does NOT serve embeddings or
-    # reranking — those still need a Gemini (free) or OpenAI key. Falls back to
-    # LIGHTRAG_LLM_API_KEY so older configs that stored the key there keep working.
+    # anthropic/claude-haiku-4.5). It ALSO serves embeddings (set
+    # LIGHTRAG_EMBEDDING_PROVIDER=openrouter, e.g. openai/text-embedding-3-large) — a
+    # true one-key setup. No reranking. Falls back to LIGHTRAG_LLM_API_KEY so older
+    # configs that stored the key there keep working.
     openrouter_api_key: str = ""
 
     # Ingest (KG construction) LLM — separate from queries. This is the COSTLY step

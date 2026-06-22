@@ -6,9 +6,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Changes landing on `main` since the last release. At release time this heading is
-renamed to the new version + date. Group entries under: Added · Changed · Fixed ·
-Removed._
+### Added
+- **OpenRouter embeddings** — set `LIGHTRAG_EMBEDDING_PROVIDER=openrouter` (e.g.
+  `openai/text-embedding-3-large`) for a true one-key-for-everything OpenRouter setup
+  (generation + embeddings). (OpenRouter still has no reranking.)
+
+### Fixed
+- **"Enter a game name first" false error** — typing the game name and immediately
+  clicking Ingest could fail because the typed value hadn't synced to the server yet.
+  Now waits a beat and re-checks before failing, so you don't have to re-type it.
+- Corrected docs that wrongly said OpenRouter has no embeddings.
 
 ## [0.1.0] — 2026-06-21
 

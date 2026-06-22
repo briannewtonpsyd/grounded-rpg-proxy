@@ -460,9 +460,12 @@ def lightrag_cmd(game: str, pdfs: list[str], cleanup_source: bool = False) -> No
     # temp PDFs on EVERY exit path — success, ingest error, or an early sys.exit (e.g.
     # missing key). NOT set for the CLI path, so a user's own book folder is untouched.
     try:
-        # Embedding key: Gemini (one-key setup) or OpenAI, depending on provider.
-        if settings.lightrag_embedding_provider == "gemini":
+        # Embedding key depends on the embedding provider.
+        ep = settings.lightrag_embedding_provider
+        if ep == "gemini":
             need, have = "GEMINI_API_KEY", settings.gemini_api_key
+        elif ep == "openrouter":
+            need, have = "OPENROUTER_API_KEY", settings.openrouter_api_key or settings.lightrag_llm_api_key
         else:
             need, have = "OPENAI_API_KEY", settings.openai_api_key
         if not have:

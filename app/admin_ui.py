@@ -289,6 +289,12 @@ def init_admin(app) -> None:
                 async def do_ingest():
                     raw = (slug_in.value or "").strip()
                     if not raw:
+                        # Type-then-click race: the just-typed name may still be in flight
+                        # to the server when the button fires. Give it a beat and re-check
+                        # before failing, so the user doesn't have to re-enter it.
+                        await asyncio.sleep(0.25)
+                        raw = (slug_in.value or "").strip()
+                    if not raw:
                         ui.notify("Enter a game name first", type="negative")
                         return
                     if not tmpdir["path"]:
@@ -448,7 +454,8 @@ def init_admin(app) -> None:
                                            label="Ingest reasoning (gemini only)")
                     emb_prov = ui.select(
                         {"gemini": "Gemini (one key · gemini-embedding-001 · 3072d)",
-                         "openai": "OpenAI (needs 2nd key · text-embedding-3-large · 3072d)"},
+                         "openai": "OpenAI (needs 2nd key · text-embedding-3-large · 3072d)",
+                         "openrouter": "OpenRouter (your OR key · e.g. openai/text-embedding-3-large)"},
                         value=settings.lightrag_embedding_provider,
                         label="Embedding provider (re-ingest to change)")
                     emb = ui.select(
@@ -483,8 +490,9 @@ def init_admin(app) -> None:
                                         value=settings.lightrag_llm_api_key,
                                         password=True, password_toggle_button=True)
                 ui.label("OpenRouter: one key, any vendor/model (e.g. anthropic/claude-haiku-4.5, "
-                         "openai/gpt-4o-mini) — but it has no embeddings/reranking, so keep a Gemini "
-                         "or OpenAI key for those. Slugs change: see openrouter.ai/models.") \
+                         "openai/gpt-4o-mini) for generation AND embeddings (e.g. "
+                         "openai/text-embedding-3-large). No reranking, so keep a Cohere/Jina key if "
+                         "you use rerank. Slugs change: see openrouter.ai/models.") \
                     .classes("text-caption text-grey")
 
                 # Test the *currently selected* provider/model/keys (any provider), without

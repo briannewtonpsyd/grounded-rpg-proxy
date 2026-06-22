@@ -184,6 +184,9 @@ def make_embed_func(provider: str, model: str):
         from openai import AsyncOpenAI
         if provider == "gemini":
             client = AsyncOpenAI(base_url=GEMINI_OPENAI_URL, api_key=settings.gemini_api_key)
+        elif provider == "openrouter":
+            client = AsyncOpenAI(base_url=OPENROUTER_URL,
+                                 api_key=settings.openrouter_api_key or settings.lightrag_llm_api_key)
         else:
             client = AsyncOpenAI(api_key=settings.openai_api_key)
         last = None

@@ -140,8 +140,9 @@ open **"OpenRouter — optional"**, set the **Query** (and/or **Ingest**) provid
 slugs change over time — check [openrouter.ai/models](https://openrouter.ai/models)).
 Two caveats:
 
-- **OpenRouter has no embeddings or reranking** — you still need a Gemini (free) or
-  OpenAI key for embeddings. It only swaps the *generation/extraction* model.
+- **OpenRouter can do embeddings too** (e.g. `openai/text-embedding-3-large`) — set
+  the embedding provider to `openrouter` for a true one-key-for-everything setup. It
+  has **no reranking**, so keep a Cohere/Jina key only if you use rerank.
 - **Cost ceilings can't price arbitrary OpenRouter models**, so for a knowledge-graph
   ingest on OpenRouter the `INGEST_MAX_COST_USD` cap won't enforce and the estimate
   reads `$0` — the proxy warns you, but watch your OpenRouter dashboard for real spend.
