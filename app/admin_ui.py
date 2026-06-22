@@ -493,15 +493,20 @@ def init_admin(app) -> None:
 
                     async def test_llm_conn():
                         from .lightrag_backend import test_llm
-                        # Apply the typed key/provider/model so the probe uses what's on screen.
+                        # Probe with the on-screen key/url, but DON'T persist them: testing
+                        # must not silently change the live config. Snapshot → set → restore.
+                        snap = {k: getattr(settings, k) for k in
+                                ("openrouter_api_key", "lightrag_llm_api_key", "lightrag_llm_base_url")}
                         settings.openrouter_api_key = k_orkey.value
-                        settings.lightrag_llm_provider = prov.value
-                        settings.lightrag_llm_model = model.value
                         settings.lightrag_llm_api_key = k_llmkey.value
                         settings.lightrag_llm_base_url = k_llmurl.value
                         test_out.classes(replace="text-caption text-grey")
                         test_out.text = f"Testing {prov.value} · {model.value}…"
-                        ok, detail = await test_llm(prov.value, model.value, effort.value)
+                        try:
+                            ok, detail = await test_llm(prov.value, model.value, effort.value)
+                        finally:
+                            for k, v in snap.items():
+                                setattr(settings, k, v)  # restore — Save is what applies changes
                         test_out.text = ("✓ " if ok else "✗ ") + detail
                         test_out.classes(replace="text-caption "
                                          + ("text-positive" if ok else "text-negative"))

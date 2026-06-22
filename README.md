@@ -137,6 +137,9 @@ works before you play. Two caveats:
 - **Cost ceilings can't price arbitrary OpenRouter models**, so for a knowledge-graph
   ingest on OpenRouter the `INGEST_MAX_COST_USD` cap won't enforce and the estimate
   reads `$0` — the proxy warns you, but watch your OpenRouter dashboard for real spend.
+- **A new OpenRouter key has no credit**, so most models return "insufficient credits"
+  until you add funds. Some `:free` model ids work without credit (availability varies)
+  — the **Test connection** button tells you immediately if a model isn't reachable.
 
 ---
 
