@@ -470,9 +470,10 @@ def init_admin(app) -> None:
                         value=settings.lightrag_embedding_provider,
                         label="Embedding provider (re-ingest to change)")
                     emb = ui.select(
-                        {"text-embedding-3-small": "OpenAI small (1536d · cheaper/faster)",
-                         "text-embedding-3-large": "OpenAI large (3072d · best quality)"},
-                        value=settings.lightrag_embedding_model, label="OpenAI embed model (if provider=openai)")
+                        {"text-embedding-3-small": "text-embedding-3-small (1536d · cheaper/faster)",
+                         "text-embedding-3-large": "text-embedding-3-large (3072d · best quality)"},
+                        value=settings.lightrag_embedding_model,
+                        label="Embedding model (for openai/openrouter providers)")
                     rerankp = ui.select(["cohere", "jina"], value=settings.rerank_provider,
                                         label="Rerank provider")
                     cost_cap = ui.number("Ingest cost ceiling $ (0 = none)",
