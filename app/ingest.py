@@ -345,6 +345,7 @@ _PRICES = {
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
     "text-embedding-3-large": {"input": 0.13},
     "text-embedding-3-small": {"input": 0.02},
+    "gemini-embedding-001": {"input": 0.15},  # default embedder — so its cost line isn't $0
 }
 
 
@@ -352,10 +353,13 @@ def _cost_breakdown(tok: dict) -> dict:
     # rates_known flags whether we actually have a price for the configured model.
     # Unknown (e.g. an OpenRouter/custom model) => the cost below is a $0 placeholder,
     # not an estimate, and the cost ceiling can't enforce against it.
+    # Price the model ACTUALLY used: embedding_model_effective resolves to
+    # gemini-embedding-001 when provider=gemini (not the raw OpenAI field).
+    emb_model = settings.embedding_model_effective
     llm_known = settings.lightrag_ingest_llm_model in _PRICES
-    emb_known = settings.lightrag_embedding_model in _PRICES
+    emb_known = emb_model in _PRICES
     llm = _PRICES.get(settings.lightrag_ingest_llm_model, {"input": 0, "output": 0})
-    emb = _PRICES.get(settings.lightrag_embedding_model, {"input": 0})
+    emb = _PRICES.get(emb_model, {"input": 0})
     in_cost = tok["llm_input"] / 1e6 * llm.get("input", 0)
     out_cost = tok["llm_output"] / 1e6 * llm.get("output", 0)
     emb_cost = tok["embedding"] / 1e6 * emb.get("input", 0)
@@ -368,7 +372,7 @@ def _cost_breakdown(tok: dict) -> dict:
 def _print_cost(tok: dict, cost: dict) -> None:
     print(f"   Tokens — KG LLM ({settings.lightrag_ingest_llm_model}): "
           f"{tok['llm_input']:,} in + {tok['llm_output']:,} out | "
-          f"embeddings ({settings.lightrag_embedding_model}): {tok['embedding']:,}")
+          f"embeddings ({settings.embedding_model_effective}): {tok['embedding']:,}")
     print(f"   Est. cost — LLM ${cost['llm_input_usd']:.4f} in + ${cost['llm_output_usd']:.4f} out "
           f"+ embed ${cost['embedding_usd']:.4f}  =  ${cost['total_usd']:.4f}  (verify rates)")
     # Only warn when the LLM actually ran (KG on) AND we have no price for it — i.e. an

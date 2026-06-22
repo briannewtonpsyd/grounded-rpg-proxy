@@ -494,13 +494,17 @@ def init_admin(app) -> None:
 
                     async def test_llm_conn():
                         from .lightrag_backend import test_llm
-                        # Probe with the on-screen key/url, but DON'T persist them: testing
-                        # must not silently change the live config. Snapshot → set → restore.
-                        snap = {k: getattr(settings, k) for k in
-                                ("openrouter_api_key", "lightrag_llm_api_key", "lightrag_llm_base_url")}
-                        settings.openrouter_api_key = k_orkey.value
-                        settings.lightrag_llm_api_key = k_llmkey.value
-                        settings.lightrag_llm_base_url = k_llmurl.value
+                        # Probe with the on-screen keys (whichever provider is selected), but
+                        # DON'T persist them: testing must not silently change the live config.
+                        # Snapshot every key field → set from the form → restore in finally.
+                        fields = {
+                            "openrouter_api_key": k_orkey.value, "lightrag_llm_api_key": k_llmkey.value,
+                            "lightrag_llm_base_url": k_llmurl.value, "gemini_api_key": k_gemini.value,
+                            "openai_api_key": k_openai.value, "anthropic_api_key": k_anthropic.value,
+                        }
+                        snap = {k: getattr(settings, k) for k in fields}
+                        for k, v in fields.items():
+                            setattr(settings, k, v)
                         test_out.classes(replace="text-caption text-grey")
                         test_out.text = f"Testing {prov.value} · {model.value}…"
                         try:
