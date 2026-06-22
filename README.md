@@ -91,13 +91,19 @@ game** (not when you play). Change these in the dashboard **Settings**.
 ### ⚠️ The knowledge graph costs real money — set a budget first
 
 Building the graph runs an AI model over **every chunk of every book**, so cost
-scales with how much you ingest. Rough, measured numbers (per book ≈ 200–300 pages):
+scales with how much you ingest. Rough numbers (per book ≈ 200–300 pages):
 
 | Ingest mode | ~Cost per book | A 4-book library |
 |---|---|---|
 | **RAG-only (default)** | a few cents | **~$0.10** |
 | KG on `gemini-2.5-flash-lite` (default KG model) | ~$1–1.5 | ~$4–6 |
 | KG on `gemini-2.5-flash` (higher quality) | ~$6–7 | **~$25–30** |
+
+> 💲 **These figures, and the in-app cost estimates, are based on provider prices
+> as of 2026-06-21 — prices change, so treat them as estimates and verify with your
+> provider.** Token *counts* shown after each ingest are exact; only the $ conversion
+> is an estimate. (Exception: when you use **OpenRouter**, the proxy fetches that
+> model's *live* price from OpenRouter at ingest time, so those costs are current.)
 
 **It adds up faster than you'd think.** Re-ingesting a book re-charges you, and
 during development we ran up **~$26 in a single day** from repeated KG re-ingests.
