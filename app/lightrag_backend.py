@@ -56,7 +56,33 @@ def _resolve_llm(provider: str, model: str, reasoning: str):
     if provider == "openrouter":
         key = settings.openrouter_api_key or settings.lightrag_llm_api_key
         return "openai", model, OPENROUTER_URL, key, {"extra_headers": dict(OPENROUTER_HEADERS)}
+    # custom (or any other value): an OpenAI-compatible endpoint. base_url is REQUIRED for
+    # 'custom' — without it the OpenAI client silently falls back to api.openai.com, which
+    # is surprising. Fail clearly instead.
+    if provider == "custom" and not settings.lightrag_llm_base_url:
+        raise ValueError("provider=custom needs a base URL (Settings → Custom endpoint base "
+                         "URL) — an OpenAI-compatible endpoint, e.g. http://localhost:11434/v1.")
     return "openai", model, settings.lightrag_llm_base_url or None, settings.lightrag_llm_api_key, {}
+
+
+def _provider_config_issue(provider: str) -> str | None:
+    """A human-readable config problem for a provider, or None if it looks usable. Lets the
+    Test button (and callers) report 'X key not set' instead of a cryptic auth/404 error."""
+    need = {
+        "gemini": (settings.gemini_api_key, "Gemini key"),
+        "openai": (settings.openai_api_key, "OpenAI key"),
+        "anthropic": (settings.anthropic_api_key, "Anthropic key"),
+        "openrouter": (settings.openrouter_api_key or settings.lightrag_llm_api_key, "OpenRouter key"),
+    }
+    if provider in need:
+        val, label = need[provider]
+        return None if val else f"{label} is not set (Settings → {label})."
+    if provider == "custom":
+        if not settings.lightrag_llm_base_url:
+            return "Custom provider needs a base URL (Settings → Custom endpoint base URL)."
+        if not settings.lightrag_llm_api_key:
+            return "Custom provider needs an endpoint key (Settings → Custom endpoint key)."
+    return None
 
 
 async def _call_llm(provider, model, reasoning, prompt, system_prompt, history_messages, **kw):
@@ -76,6 +102,11 @@ async def _call_llm(provider, model, reasoning, prompt, system_prompt, history_m
 async def test_llm(provider: str, model: str, reasoning: str = "none") -> tuple[bool, str]:
     """One tiny round-trip to validate a provider/model/key from the dashboard.
     Returns (ok, detail) and never raises — on failure `detail` is the error text."""
+    issue = _provider_config_issue(provider)
+    if issue:  # clear message instead of a cryptic auth error / silent fallback
+        return False, issue
+    if not model.strip():
+        return False, "No model id set."
     try:
         out = await _call_llm(provider, model, reasoning,
                               "Reply with the single word: OK.",
