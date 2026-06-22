@@ -10,8 +10,24 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **OpenRouter embeddings** — set `LIGHTRAG_EMBEDDING_PROVIDER=openrouter` (e.g.
   `openai/text-embedding-3-large`) for a true one-key-for-everything OpenRouter setup
   (generation + embeddings). (OpenRouter still has no reranking.)
+- **End-to-end test** (`tests/e2e.py`) — ingests a tiny fixture PDF and asserts the
+  query is grounded; the gate that runs before merging ingest/embedding changes.
+
+### Changed
+- **Embedding settings reworked** — the embedding **provider** and **model** are now
+  side by side, and the model field adapts to the provider: Gemini is fixed, OpenAI
+  offers the two `-3-small/-large` options, and OpenRouter is **typeable** (pick a
+  suggestion or type any embedding id).
+- **Clearer game-name entry** — friendlier label, "spaces & capitals are fine", and a
+  **live preview** of the resulting PUM model name as you type
+  (`Vampire: The Masquerade` → `vampire-the-masquerade`).
 
 ### Fixed
+- **Dashboard ingest used the wrong embedder** — a UI-selected embedding provider
+  could silently fall back to the Gemini default (the index then wouldn't query). The
+  ingest now uses the on-screen selection, and each game's embedding
+  provider/model/**dimension** is resolved **per-index**, so games built with different
+  embedders coexist and query correctly.
 - **"Enter a game name first" false error** — typing the game name and immediately
   clicking Ingest could fail because the typed value hadn't synced to the server yet.
   Now waits a beat and re-checks before failing, so you don't have to re-type it.
