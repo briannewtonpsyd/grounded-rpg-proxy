@@ -16,6 +16,8 @@ logs/
 # copyrighted rulebook PDFs — each user supplies their own
 books/
 *.pdf
+# ...except the tiny synthetic test fixture (our own content, safe to commit)
+!tests/fixtures/sample_rulebook.pdf
 
 # --- os / editor cruft ---
 .DS_Store
