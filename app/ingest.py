@@ -233,13 +233,23 @@ async def _lightrag_ingest(slug: str, books: list[tuple[str, str]]) -> None:
 
     embed_provider = settings.lightrag_embedding_provider
     embed_model = settings.embedding_model_effective
+    embed_func = make_embed_func(embed_provider, embed_model)
+    # Detect the REAL vector size from the model itself (one tiny probe) rather than
+    # guessing from the name — so any embedding model works (incl. non-1536/3072
+    # OpenRouter ids). Falls back to the configured dim if the probe fails.
+    embed_dim = settings.lightrag_embedding_dim
+    try:
+        embed_dim = len((await embed_func(["dimension probe"]))[0])
+        if embed_dim != settings.lightrag_embedding_dim:
+            print(f"Detected embedding dimension: {embed_dim} (for {embed_model}).", flush=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️  Could not probe embedding dim ({str(e)[:80]}); using {embed_dim}.", flush=True)
     wd = _lightrag_dir(slug)
     os.makedirs(wd, exist_ok=True)
     rag = LightRAG(
         working_dir=wd, llm_model_func=_ingest_llm_func,
         embedding_func=EmbeddingFunc(
-            embedding_dim=settings.lightrag_embedding_dim, max_token_size=8192,
-            func=make_embed_func(embed_provider, embed_model)),
+            embedding_dim=embed_dim, max_token_size=8192, func=embed_func),
         **_LIGHTRAG_INGEST_KW)
     await rag.initialize_storages()
     await initialize_pipeline_status()
@@ -266,7 +276,7 @@ async def _lightrag_ingest(slug: str, books: list[tuple[str, str]]) -> None:
     audit = {"slug": slug, "model": settings.lightrag_ingest_llm_model,
              "reasoning": settings.lightrag_ingest_reasoning_effort,
              "embedding_model": embed_model, "embedding_provider": embed_provider,
-             "embedding_dim": settings.lightrag_embedding_dim,  # per-index dim for query-time
+             "embedding_dim": embed_dim,  # DETECTED per-index dim, for query-time
              "skip_kg": skip_kg, "concurrency": _LIGHTRAG_INGEST_KW, "books": []}
     if skip_kg:
         print("RAG-only mode (skip_kg): no knowledge-graph extraction — embeddings only. "

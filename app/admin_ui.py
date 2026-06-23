@@ -311,7 +311,7 @@ def init_admin(app) -> None:
                     if not tmpdir["path"]:
                         ui.notify("Upload at least one PDF", type="negative")
                         return
-                    if not (emb.value or "").strip():
+                    if not emb_model_value():
                         ui.notify("Pick or type an embedding model first", type="negative")
                         return
                     slug = slugify(raw)  # safe: raw is non-empty, so never the 'untitled' fallback
@@ -366,7 +366,7 @@ def init_admin(app) -> None:
                     # .env write landing in time — otherwise the index can be built with the
                     # wrong embedder (silently falling back to the Gemini default) and won't query.
                     _ep = emb_prov.value
-                    _em = (emb.value or "").strip()
+                    _em = emb_model_value()
                     _emodel_key = ("LIGHTRAG_GEMINI_EMBEDDING_MODEL" if _ep == "gemini"
                                    else "LIGHTRAG_EMBEDDING_MODEL")
                     env = {**os.environ,
@@ -488,46 +488,58 @@ def init_admin(app) -> None:
                     cost_cap = ui.number("Ingest cost ceiling $ (0 = none)",
                                          value=settings.ingest_max_cost_usd, format="%.2f", min=0)
 
-                # Embeddings: provider + model side by side. The model field adapts to the
-                # provider — a fixed pick for Gemini, the two OpenAI models, or a typeable
-                # field for OpenRouter (where many model ids are valid).
+                # Embeddings: provider + model side by side. The model CONTROL depends on
+                # provider — a dropdown for Gemini/OpenAI (fixed sets), and a plain free-text
+                # box for OpenRouter, where any embedding id is valid. (A typeable select
+                # discards uncommitted text on blur, so OpenRouter gets a real text input.)
                 _EMB_CHOICES = {
                     "gemini": ["gemini-embedding-001"],
                     "openai": ["text-embedding-3-small", "text-embedding-3-large"],
-                    "openrouter": ["openai/text-embedding-3-large", "openai/text-embedding-3-small"],
                 }
                 _emb_cur = settings.embedding_model_effective
-                _emb_opts = _EMB_CHOICES.get(settings.lightrag_embedding_provider, ["text-embedding-3-large"])
-                _emb_opts = list(dict.fromkeys(_emb_opts + [_emb_cur]))  # ensure current value is selectable
+                _is_or = settings.lightrag_embedding_provider == "openrouter"
+                _sel_opts = _EMB_CHOICES.get(settings.lightrag_embedding_provider, ["text-embedding-3-large"])
+                if not _is_or and _emb_cur not in _sel_opts:
+                    _sel_opts = list(dict.fromkeys(_sel_opts + [_emb_cur]))
                 with ui.row().classes("items-center gap-3 w-full no-wrap"):
                     emb_prov = ui.select(["gemini", "openai", "openrouter"],
                                          value=settings.lightrag_embedding_provider,
                                          label="Embedding provider").classes("grow")
-                    emb = ui.select(_emb_opts, value=_emb_cur, with_input=True,
-                                    new_value_mode="add-unique", label="Embedding model").classes("grow")
+                    emb_sel = ui.select(_sel_opts, value=(_sel_opts[0] if _is_or else _emb_cur),
+                                        label="Embedding model").classes("grow")
+                    emb_txt = ui.input("Embedding model (OpenRouter id)",
+                                       value=(_emb_cur if _is_or else "openai/text-embedding-3-large"),
+                                       placeholder="e.g. openai/text-embedding-3-large").classes("grow")
                 emb_note = ui.label("").classes("text-caption text-grey")
 
-                def _set_emb_note():
+                def emb_model_value() -> str:
+                    """The chosen embedding model, from whichever control the provider uses."""
+                    raw = emb_txt.value if emb_prov.value == "openrouter" else emb_sel.value
+                    return (raw or "").strip()
+
+                def _set_emb_view():
+                    p = emb_prov.value
+                    emb_txt.visible = (p == "openrouter")
+                    emb_sel.visible = (p != "openrouter")
                     emb_note.text = {
-                        "gemini": "Gemini uses gemini-embedding-001 (3072d) — one model, no choice needed.",
+                        "gemini": "Gemini uses gemini-embedding-001 (3072d) — one model.",
                         "openai": "Pick an OpenAI embedding model. Re-ingest each game to change.",
-                        "openrouter": "Pick or TYPE any OpenRouter embedding id (e.g. "
-                                      "openai/text-embedding-3-large). Re-ingest to change.",
-                    }.get(emb_prov.value, "")
+                        "openrouter": "Type any OpenRouter embedding id (e.g. openai/text-embedding-3-large). "
+                                      "The real vector size is detected at ingest. Re-ingest to change.",
+                    }.get(p, "")
 
                 def _on_emb_prov_change():
-                    # Provider CHANGED: swap the suggestions and reset to that provider's
-                    # default (the previous model doesn't carry across providers).
+                    # Provider CHANGED: reset the now-active control to that provider's default.
                     p = emb_prov.value
-                    opts = _EMB_CHOICES.get(p, ["text-embedding-3-large"])
-                    emb.set_options(opts, value=opts[0])
-                    emb.set_enabled(p != "gemini")  # Gemini has a single embedding model
-                    _set_emb_note()
+                    if p == "openrouter":
+                        emb_txt.value = "openai/text-embedding-3-large"
+                    else:
+                        opts = _EMB_CHOICES.get(p, ["text-embedding-3-large"])
+                        emb_sel.set_options(opts, value=opts[0])
+                    _set_emb_view()
 
                 emb_prov.on_value_change(lambda _: _on_emb_prov_change())
-                # Initial state: keep the saved model (don't reset it), just set enabled + note.
-                emb.set_enabled(settings.lightrag_embedding_provider != "gemini")
-                _set_emb_note()
+                _set_emb_view()  # initial: show the right control with its saved value
 
                 rerank_on = ui.switch("Reranking enabled", value=settings.lightrag_enable_rerank)
                 ui.label("API keys (click the eye to reveal)").classes("text-grey mt-2")
@@ -586,7 +598,7 @@ def init_admin(app) -> None:
                     test_out = ui.label("").classes("text-caption")
 
                 def save_settings():
-                    emb_model = (emb.value or "").strip()
+                    emb_model = emb_model_value()
                     # 3072 unless it's a *-small model (gemini-embedding-001 & -large are 3072).
                     emb_dim = 1536 if "small" in emb_model else 3072
                     emb_changed = (emb_model != settings.embedding_model_effective

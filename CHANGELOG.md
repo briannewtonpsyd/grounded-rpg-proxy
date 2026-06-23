@@ -23,6 +23,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`Vampire: The Masquerade` → `vampire-the-masquerade`).
 
 ### Fixed
+- **OpenRouter embedding model wouldn't stick** — typing a custom OpenRouter embedding
+  id and clicking away reverted it to a suggestion. OpenRouter now uses a plain text
+  box (typed value sticks, no Enter needed), and the real vector dimension is detected
+  at ingest, so any embedding model works.
 - **Dashboard ingest used the wrong embedder** — a UI-selected embedding provider
   could silently fall back to the Gemini default (the index then wouldn't query). The
   ingest now uses the on-screen selection, and each game's embedding
