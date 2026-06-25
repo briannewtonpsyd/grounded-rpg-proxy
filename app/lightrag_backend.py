@@ -390,6 +390,23 @@ class LightRAGBackend:
             top_k=settings.lightrag_top_k, chunk_top_k=settings.lightrag_chunk_top_k,
             user_prompt=user_prompt, include_references=True))
         raw = (ans or "").strip()
+        # An empty answer means the generation LLM failed (LightRAG swallows the error and
+        # returns empty; a genuine no-context answer is non-empty, e.g. "Sorry, …[no-context]").
+        # Probe the Query LLM to confirm and surface a real failure instead of a silent blank
+        # 200 — so the user sees e.g. an invalid/unavailable model. (Probe = no shared state,
+        # so this is concurrency-safe, unlike capturing the error in a module global.)
+        if not raw:
+            ok, detail = await test_llm(settings.lightrag_llm_provider, settings.lightrag_llm_model,
+                                        settings.lightrag_reasoning_effort)
+            if not ok:
+                log.warning("Query LLM unreachable (%s · %s): %s",
+                            settings.lightrag_llm_provider, settings.lightrag_llm_model, detail)
+                msg = (f"⚠️ Grounding proxy: couldn't generate a response. The Query LLM "
+                       f"(provider={settings.lightrag_llm_provider}, model={settings.lightrag_llm_model}) "
+                       f"failed — {detail}. Check the Query LLM provider/model in the dashboard "
+                       f"Settings (use 'Test query LLM connection').")
+                return AskOutcome(answer=msg, query_sent=f"[lightrag {mode} game={game_id} ERROR] {query[:200]}",
+                                  game_id=game_id, backend=self.name)
         return AskOutcome(
             answer=raw,
             query_sent=f"[lightrag {mode} game={game_id}] {query[:300]}",

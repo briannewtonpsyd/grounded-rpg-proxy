@@ -23,6 +23,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`Vampire: The Masquerade` → `vampire-the-masquerade`).
 
 ### Fixed
+- **Query LLM failures are now surfaced** — if the configured Query LLM model is
+  invalid/unavailable (e.g. a bad OpenRouter slug → 404) the generation step would
+  fail but the proxy returned a silent empty `200`, so PUM showed nothing. It now
+  returns a clear message naming the provider/model and the error, pointing to
+  Settings → Test query LLM connection.
 - **OpenRouter embedding model wouldn't stick** — typing a custom OpenRouter embedding
   id and clicking away reverted it to a suggestion. OpenRouter now uses a plain text
   box (typed value sticks, no Enter needed), and the real vector dimension is detected
